@@ -8,6 +8,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	"os"
 )
 
@@ -18,9 +19,25 @@ type podPvcLabelCollector struct {
 
 func (p podPvcLabelCollector) Update(ch chan<- prometheus.Metric) error {
 	// Connect to Kubernetes API
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		fmt.Errorf("cannot to create config: %v", err)
+	var config *rest.Config
+	// Check if running inside a cluster else use config from home directory
+	if _, err := os.Stat("/var/run/secrets/kubernetes.io/serviceaccount/token"); err == nil {
+		config, err = rest.InClusterConfig()
+		if err != nil {
+			fmt.Errorf("cannot to create config: %v", err)
+		}
+	} else {
+		home := os.Getenv("HOME")
+		config, err = clientcmd.BuildConfigFromFlags("", home+"/.kube/config")
+		if err != nil {
+			fmt.Errorf("cannot to create config: %v", err)
+		}
+	}
+
+	// Set namespace from environment variable, if not set use default 'jenkins'
+	namespace := os.Getenv("NAMESPACE")
+	if namespace == "" {
+		namespace = "jenkins"
 	}
 
 	// creates the clientset
@@ -30,7 +47,6 @@ func (p podPvcLabelCollector) Update(ch chan<- prometheus.Metric) error {
 	}
 
 	// Get the namespace from the environment variable
-	namespace := os.Getenv("NAMESPACE")
 
 	persitentVolumeClaims := clientset.CoreV1().PersistentVolumeClaims(namespace)
 	// List all pvcs in the namespace
@@ -46,18 +62,19 @@ func (p podPvcLabelCollector) Update(ch chan<- prometheus.Metric) error {
 			if err != nil {
 				fmt.Errorf("cannot to get pod: %v", err)
 			}
-			// Add labels from metadata to the metric
+			// Add labels from pod annotations to the metric as labels
 			ch <- prometheus.MustNewConstMetric(
 				p.desc,
 				prometheus.GaugeValue,
 				1,
 				pod.Name,
 				pvc.Name,
-				pod.Labels["jenkins/branch_name"],
-				pod.Labels["jenkins/stage"],
-				pod.Labels["jenkins/build"],
-				pod.Labels["jenkins/job"],
-				pod.Labels["jenkins/project"],
+				pod.Annotations["jenkins/branch_name"],
+				pod.Annotations["jenkins/stage"],
+				pod.Annotations["jenkins/build"],
+				pod.Annotations["jenkins/job"],
+				pod.Annotations["jenkins/project"],
+				pod.Annotations["jenkins/build_url"],
 			)
 		}
 
@@ -67,9 +84,9 @@ func (p podPvcLabelCollector) Update(ch chan<- prometheus.Metric) error {
 
 func NewPodPvcLabelCollector(logger log.Logger) (Collector, error) {
 	desc := prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "pod", "pvc"),
+		prometheus.BuildFQName("pvc", "pod", "info"),
 		"pod_pvc_exporter: Export pod pvc labels from pod metadata",
-		[]string{"pod", "pvc", "branch_name", "stage", "build", "job", "project"},
+		[]string{"pod", "persistentvolumeclaim", "branch_name", "stage", "build", "job", "project", "build_url"},
 		nil,
 	)
 	return &podPvcLabelCollector{
