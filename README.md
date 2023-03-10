@@ -117,6 +117,16 @@ The exporter can be scraped by Prometheus using the following configuration:
 
 Don't forget to replace `<NAMESPACE>` with the namespace of the exporter pod.
 
+## Kubernetes Deployment
+
+To use the pod_pvc_exporter, the latest image can be obtained from Docker Hub by running the command `docker pull aladex/pod_pvc_exporter:latest`. Alternatively, other versions of the image can be used as well.
+
+A sample manifest for the exporter can be found in the repository at `manifest/pod_pvc_exporter.yaml`. The manifest deploys the application to the monitoring namespace, but this can be changed to any other desired namespace.
+
+To use the exporter, the manifest can be applied using `kubectl apply -f manifest/pod_pvc_exporter.yaml`. Once deployed, the exporter will start collecting metrics, which can be scraped by Prometheus.
+
+Overall, the pod_pvc_exporter provides a convenient way to monitor PVC usage in a Kubernetes cluster and can be easily deployed using the provided manifest.
+
 # Example Output
 
 The following is an example output of the exporter:

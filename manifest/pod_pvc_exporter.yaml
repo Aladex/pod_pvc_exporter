@@ -1,0 +1,95 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pod-pvc-exporter
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pod-pvc-exporter
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+      labels:
+        app: pod-pvc-exporter
+    spec:
+      serviceAccountName: pod-pvc-exporter
+      containers:
+        - name: pod-pvc-exporter
+          image: aladex/pod_pvc_exporter:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: NAMESPACE
+              value: jenkins
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            timeoutSeconds: 1
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: http
+            initialDelaySeconds: 10
+            timeoutSeconds: 1
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: pod-pvc-exporter
+  namespace: monitoring
+spec:
+  selector:
+    app: pod-pvc-exporter
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+  type: ClusterIP
+
+# Service Account for pod-pvc-exporter
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pod-pvc-exporter
+  namespace: monitoring
+
+# ClusterRole for pod-pvc-exporter
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: pod-pvc-exporter
+rules:
+  - apiGroups: [ "" ]
+    resources: [ "pods", "persistentvolumeclaims" ]
+    verbs: [ "get", "list", "watch" ]
+  - apiGroups: [ "storage.k8s.io" ]
+    resources: [ "storageclasses" ]
+    verbs: [ "get", "list", "watch" ]
+
+# ClusterRoleBinding for pod-pvc-exporter
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: pod-pvc-exporter
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: pod-pvc-exporter
+subjects:
+  - kind: ServiceAccount
+    name: pod-pvc-exporter
+    namespace: monitoring
