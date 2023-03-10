@@ -9,6 +9,7 @@ The exporter can be run inside a Kubernetes cluster as a pod. The pod needs to h
 You need to provide the following environment variables to the pod:
 - `NAMESPACE`: The namespace of the pod and PVCs.
 
+
 ## Usage with TopoLVM
 
 You can use the following queries to get information on the usage of a specific pod and PVC, including the amount of content used and available:
